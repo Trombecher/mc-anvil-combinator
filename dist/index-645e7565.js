@@ -51,7 +51,7 @@ var ie=Object.defineProperty;var le=(i,t,e)=>t in i?ie(i,t,{enumerable:!0,config
             ${z(x,i=>P`
                 <div class="border border-gray-200 pt-4 pb-2 rounded-lg">
                     <div class="flex gap-4 mb-2 pb-4 mx-4 items-center border-b">
-                        <img alt="" class="w-8 h-8 [image-rendering:pixelated]" src=${i.item.derive(t=>`/${t.toLowerCase().replaceAll(" ","_")}.png`)}></img>
+                        <img alt="" class="w-8 h-8 [image-rendering:pixelated]" src=${i.item.derive(t=>`${t.toLowerCase().replaceAll(" ","_")}.png`)}></img>
                         <${C} options=${fe} target=${i.item}></${C}>
                         <${m} onclick=${()=>{i.enchantments.add(Z("Mending",1))}}>+ Add Enchantment
                         </${m}>

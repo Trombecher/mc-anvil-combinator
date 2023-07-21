@@ -236,7 +236,7 @@ document.querySelector("#app")!.append(...html`
             ${map(items, item => html`
                 <div class="border border-gray-200 pt-4 pb-2 rounded-lg">
                     <div class="flex gap-4 mb-2 pb-4 mx-4 items-center border-b">
-                        <img alt="" class="w-8 h-8 [image-rendering:pixelated]" src=${item.item.derive(item => `/${item.toLowerCase().replaceAll(" ", "_")}.png`)}></img>
+                        <img alt="" class="w-8 h-8 [image-rendering:pixelated]" src=${item.item.derive(item => `${item.toLowerCase().replaceAll(" ", "_")}.png`)}></img>
                         <${SelectBox} options=${itemNames} target=${item.item}></${SelectBox}>
                         <${Button} onclick=${() => {
                             item.enchantments.add(createObservableEnchantment("Mending", 1));
