@@ -2,14 +2,13 @@ import "./main.css";
 import {html, insert, map} from "./lib.ts";
 import {Observable, ObservableArray, reduce} from "./observable.ts";
 import {
-    best,
     Branch,
-    bruteForceOptimized,
     enchantmentTypes,
     getEnchantmentType,
     Item,
     itemTypes
 } from "./mceb.ts";
+import {Message} from "./api.ts";
 
 type ObservableEnchantment = {
     type: Observable<string>,
@@ -71,10 +70,10 @@ const items = new ObservableArray<ObservableItem>(
 
         return createObservableItem(
             eps ?
-            eps.map(ep => createObservableEnchantment(
-                enchantmentTypes.find(e => e.id === ep[0])!.name,
-                +ep[1]
-            )) : [],
+                eps.map(ep => createObservableEnchantment(
+                    enchantmentTypes.find(e => e.id === ep[0])!.name,
+                    +ep[1]
+                )) : [],
             Object.keys(itemTypes).find(key => itemTypes[key] === pack[0])!
         );
     }) : []
@@ -106,21 +105,25 @@ function staticHTML(html: string) {
 }
 
 const downArrow = fromHTML(`
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 7L8 12L13 7" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <svg width="16" height="16" viewBox="0 0 16 16" class="fill-none stroke-gray-900 dark:stroke-gray-200" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 7L8 12L13 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
 `);
 
 const upArrow = fromHTML(`
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 10L8 5L13 10" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <svg width="16" height="16" viewBox="0 0 16 16" class="fill-none stroke-gray-900 dark:stroke-gray-200" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 10L8 5L13 10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
 `);
 
-function Button({children, className, reference, ...attributes}: {children: Node[], reference: (self: HTMLElement) => void, className: string}) {
+function Button({children, className, reference, ...attributes}: {
+    children: Node[],
+    reference: (self: HTMLElement) => void,
+    className: string
+}) {
     const button = html`
         <button
-            class="px-3 py-0.5 rounded-full bg-gray-600/10 hover:bg-gray-600/20 transition flex items-center gap-1"
+            class="select-none px-3 py-0.5 rounded-full bg-gray-400/10 hover:bg-gray-400/20 transition flex items-center gap-1"
         >
             ${children}
         </button>
@@ -148,7 +151,7 @@ function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Obse
             upArrowClone.style.display = "none";
             document.onmousedown = null;
         }
-    })
+    });
 
     let selector: HTMLElement;
     let button: HTMLElement;
@@ -161,7 +164,7 @@ function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Obse
                     document.onmousedown = e => {
                         if(be.target !== e.target && (e.target !== selector && !selector.contains(e.target as Node)))
                             open.value = false;
-                    }
+                    };
                 }}
                 reference=${(self: HTMLElement) => button = self}
             >
@@ -177,7 +180,7 @@ function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Obse
                         const rect = button.getBoundingClientRect();
                         conditional = rect.y + rect.height + 320 > window.innerHeight ? "bottom-[calc(100%+.5rem)]" : "top-[calc(100%+.5rem)]";
                     } else conditional = "hidden";
-                    return `${conditional} z-10 absolute shadow-xl shadow-black/20 border border-gray-200 rounded-lg w-60 max-h-80 overflow-y-auto bg-white`;
+                    return `${conditional} z-10 absolute shadow-xl dark:shadow-none shadow-black/20 border border-gray-200 rounded-lg w-60 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 dark:border-gray-700`;
                 })}>
                 ${insert(options.derive(options => options.map(option => html`
                     <button onclick=${() => {
@@ -191,31 +194,43 @@ function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Obse
     `;
 }
 
+const worker = new Worker("worker.js", {type: "module"});
+
 const itemNames = new Observable(Object.keys(itemTypes).sort());
+
+// @ts-ignore
+const result: Observable<Branch | string | undefined> = new Observable(undefined);
 
 const output = new Observable(false);
 output.subscribe(output => {
-    if(!output) return;
+    if(!output) {
+        result.value = undefined;
+        return;
+    }
 
-    bestBranch.value = best(bruteForceOptimized(items.map(item => {
-        const itemData = new Item(item.item.value)
-
-        itemData.enchantments = item.enchantments.map(enchantment => ({
-            level: enchantment.level.value,
-            type: getEnchantmentType(enchantment.type.value)
-        }));
-
-        return itemData;
-    })));
+    worker.postMessage(params.get("i"));
 });
 
-// @ts-ignore
-const bestBranch: Observable<Branch | null> = new Observable(null);
+worker.onmessage = (e: MessageEvent<Message>) => {
+    if(e.data.success) {
+        result.value = {
+            totalCost: e.data.totalCost,
+            steps: e.data.steps.map(step => ({
+                cost: step.cost,
+                target: Item.unpack(step.target),
+                sacrifice: Item.unpack(step.sacrifice),
+                result: Item.unpack(step.result)
+            }))
+        };
+    } else {
+        result.value = e.data.error;
+    }
+};
 
 function UIItem({item}: {item: Item}) {
     return `
         <div class="table-cell">
-            <h3>${item.item}</h3>
+            <h3 class="text-white">${item.item}</h3>
             ${item.enchantments.map(enchantment => `
                 <div>${enchantment.type.name} ${roman[enchantment.level]}</div>
             `).join("")}
@@ -224,19 +239,61 @@ function UIItem({item}: {item: Item}) {
 }
 
 document.querySelector("#app")!.append(...html`
-    <header class="py-6 bg-white/30 backdrop-blur-xl z-10 backdrop:saturate-200 sticky top-0 w-full flex justify-center gap-4 items-center">
-        <${Button} onclick=${addDefaultItem}>+ Add Item</${Button}>
-        <div class="flex rounded-full bg-gray-600/10 p-1 gap-2">
-            <button class=${output.derive(output => `${output ? "" : "bg-gray-600/20 "}rounded-full px-4 hover:bg-gray-600/10 transition`)} onclick=${() => output.value = false}>Input</button>
-            <button class=${output.derive(output => `${output ? "bg-gray-600/20 " : ""}rounded-full px-4 hover:bg-gray-600/10 transition`)} onclick=${() => output.value = true}>Calculate</button>
+    <header
+        class="py-4 bg-gray-100/30 dark:bg-gray-900/30 backdrop-blur-xl z-10 backdrop:saturate-200 sticky top-0 w-full gap-4 flex justify-center">
+        <div class="px-6 grid grid-cols-[1fr_min-content_1fr] w-full max-w-screen-md items-center">
+            <div class="font-semibold text-black text-lg dark:text-white select-none">Minecraft Anvil Combinator</div>
+            <div class="rounded-full bg-gray-400/10 p-1 gap-2 flex">
+                <button
+                    class=${output.derive(output => `${output ? "" : "bg-gray-400/20 "}rounded-full px-4 hover:bg-gray-400/20 transition`)}
+                    onclick=${() => output.value = false}>Input
+                </button>
+                <button
+                    class=${output.derive(output => `${output ? "bg-gray-400/20 " : ""}rounded-full px-4 hover:bg-gray-400/20 transition`)}
+                    onclick=${() => output.value = true}>Calculate
+                </button>
+            </div>
+            <div class="flex justify-end">
+                <${Button} onclick=${addDefaultItem}>+ Add Item</${Button}>
+            </div>
         </div>
     </header>
     <main class="max-w-screen-md w-full px-6">
         <div class=${output.derive(output => `${output ? "hidden" : ""} flex flex-col gap-4`)}>
+            <div class="border bg-white border-gray-200 p-4 rounded-lg dark:border-gray-700 dark:bg-gray-800/50">
+                Some popular presets:
+                <ul class="list-inside list-disc">
+                    <li>
+                        <a href="?i=F-XP5-XJ5-XQ1-XR3-Xa1"
+                           class="text-indigo-600 font-medium hover:text-indigo-400 transition">Best Axe</a>
+                    </li>
+                    <li>
+                        <a href="?i=E-Xa1-XR3-XJ5-XN2-Xm3-XO3"
+                           class="text-indigo-600 font-medium hover:text-indigo-400 transition">Best Sword</a>
+                    </li>
+                    <li>
+                        <a href="?i=D-XA4-XH3-XC4-Xa1-XR3-XF3-Xk3"
+                           class="text-indigo-600 font-medium hover:text-indigo-400 transition">Best Boots</a>
+                    </li>
+                </ul>
+            </div>
+            <h1 class="font-semibold mr-auto text-black dark:text-white select-none">Items ${"("}${(() => {
+                const observable = new Observable(items.length);
+                
+                const update = () => observable.value = items.length;
+                
+                items.subscribeToInsert(update);
+                items.subscribeToRemoveAt(update);
+                items.subscribeToSet(update);
+                
+                return observable;
+            })()}) To Combine:</h1>
             ${map(items, item => html`
-                <div class="border border-gray-200 pt-4 pb-2 rounded-lg">
-                    <div class="flex gap-4 mb-2 pb-4 mx-4 items-center border-b">
-                        <img alt="" class="w-8 h-8 [image-rendering:pixelated]" src=${item.item.derive(item => `${item.toLowerCase().replaceAll(" ", "_")}.png`)}></img>
+                <div
+                    class="border bg-white border-gray-200 pt-4 pb-2 rounded-lg dark:border-gray-700 dark:bg-gray-800/50">
+                    <div class="flex gap-4 mb-2 pb-4 mx-4 items-center border-b border-gray-200 dark:border-gray-700">
+                        <img alt="" class="w-8 h-8 [image-rendering:pixelated]"
+                             src=${item.item.derive(item => `${item.toLowerCase().replaceAll(" ", "_")}.png`)}></img>
                         <${SelectBox} options=${itemNames} target=${item.item}></${SelectBox}>
                         <${Button} onclick=${() => {
                             item.enchantments.add(createObservableEnchantment("Mending", 1));
@@ -259,7 +316,7 @@ document.querySelector("#app")!.append(...html`
                                         enchantmentTypes.map(type => type.name).sort() :
                                         enchantmentTypes.filter(type =>
                                             type.applicable.indexOf(item) !== -1).map(type =>
-                                                type.name).sort())}
+                                            type.name).sort())}
                                     target=${enchantment.type}
                                 ></${SelectBox}>
                                 <${SelectBox}
@@ -279,26 +336,40 @@ document.querySelector("#app")!.append(...html`
             `[1])}
         </div>
         <div class=${output.derive(output => output ? "" : "hidden")}>
-            ${insert(bestBranch.derive(branch => branch ? staticHTML(`
-                <h1 class="text-lg">Branch with total cost: ${branch.totalCost}</h1>
-                <div class="grid [grid-template-columns:min-content_min-content_1fr_1fr_1fr] gap-4">
-                    <div>Step</div>
-                    <div>Cost</div>
-                    <div>Target</div>
-                    <div>Sacrifice</div>
-                    <div>Result</div>
-                    ${branch.steps.map((step, index) => `
-                        <div class="table-cell">${index + 1}</div>
-                        <div class="table-cell">${step.cost}</div>
-                        ${UIItem({item: step.target})}
-                        ${UIItem({item: step.sacrifice})}
-                        ${UIItem({item: step.result})}
-                    `).join("")}
-                </div>
-            `) : []))}
+            ${insert(result.derive(result => {
+                if(typeof result === "object") {
+                    return staticHTML(`
+                        <h1 class="text-lg">Branch with total cost: ${result.totalCost}</h1>
+                        <div class="grid [grid-template-columns:min-content_min-content_1fr_1fr_1fr] gap-4">
+                            <div>Step</div>
+                            <div>Cost</div>
+                            <div>Target</div>
+                            <div>Sacrifice</div>
+                            <div>Result</div>
+                            ${result.steps.map((step, index) => `
+                                <div class="table-cell">${index + 1}</div>
+                                <div class="table-cell">${step.cost}</div>
+                                ${UIItem({item: step.target})}
+                                ${UIItem({item: step.sacrifice})}
+                                ${UIItem({item: step.result})}
+                            `).join("")}
+                        </div>
+                    `);
+                }
+                
+                if(typeof result === "string") {
+                    return staticHTML(`
+                        <div>Error: ${result}</div>
+                    `);
+                }
+                
+                return staticHTML(`
+                    <div>Loading</div>
+                `);
+            }))}
         </div>
     </main>
-    <footer class="p-6 text-gray-400 font-light mt-auto">
+    <footer class="p-6 text-gray-500 text-sm select-none font-light mt-auto">
         © Trombecher ${new Date().getFullYear()}. All Rights Reserved.
     </footer>
 `);

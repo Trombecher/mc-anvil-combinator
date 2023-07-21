@@ -1,0 +1,1 @@
+import{b as c,a as r,I as o}from"./mceb-8860921f.js";onmessage=t=>{const a=t.data;let e;try{e=c(r(a.split("-").map(s=>o.unpack(s))))}catch(s){postMessage({success:!1,error:s.message});return}postMessage({success:!0,totalCost:e.totalCost,steps:e.steps.map(s=>({cost:s.cost,target:s.target.pack(),sacrifice:s.sacrifice.pack(),result:s.result.pack()}))})};
