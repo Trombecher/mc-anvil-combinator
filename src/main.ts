@@ -1,5 +1,4 @@
 import "./main.css";
-import {html, insert, map} from "./lib.ts";
 import {Observable, ObservableArray, reduce} from "./observable.ts";
 import {
     Branch,
@@ -9,6 +8,7 @@ import {
     itemTypes
 } from "./mceb.ts";
 import {Message} from "./api.ts";
+import {html, map, native} from "./a0.ts";
 
 type ObservableEnchantment = {
     type: Observable<string>,
@@ -89,32 +89,17 @@ function addDefaultItem() {
     items.add(createObservableItem([], "Book"));
 }
 
-function fromHTML(html: string) {
-    const dummy = document.createElement("div");
-    dummy.innerHTML = html;
-    return dummy.children[0];
-}
-
-function staticHTML(html: string) {
-    const dummy = document.createElement("div");
-    dummy.innerHTML = html;
-    const nodes: Node[] = [];
-    for(const node of dummy.childNodes)
-        nodes.push(node);
-    return nodes;
-}
-
-const downArrow = fromHTML(`
+const downArrow = native`
     <svg width="16" height="16" viewBox="0 0 16 16" class="fill-none stroke-gray-900 dark:stroke-gray-200" xmlns="http://www.w3.org/2000/svg">
         <path d="M3 7L8 12L13 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-`);
+`[1];
 
-const upArrow = fromHTML(`
+const upArrow = native`
     <svg width="16" height="16" viewBox="0 0 16 16" class="fill-none stroke-gray-900 dark:stroke-gray-200" xmlns="http://www.w3.org/2000/svg">
         <path d="M3 10L8 5L13 10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-`);
+`[1];
 
 function Button({children, className, reference, ...attributes}: {
     children: Node[],
@@ -133,7 +118,7 @@ function Button({children, className, reference, ...attributes}: {
     Object.assign(button, attributes);
     if(className)
         button.classList.add(...className.split(" "));
-    return [button];
+    return button;
 }
 
 function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Observable<T>}) {
@@ -153,7 +138,26 @@ function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Obse
         }
     });
 
-    let selector: HTMLElement;
+    let selector = html`
+        <div
+            class=${open.derive(open => {
+                let conditional: string;
+                if(open) {
+                    const rect = button.getBoundingClientRect();
+                    conditional = rect.y + rect.height + 320 > window.innerHeight ? "bottom-[calc(100%+.5rem)]" : "top-[calc(100%+.5rem)]";
+                } else conditional = "hidden";
+                return `${conditional} z-10 absolute shadow-xl dark:shadow-none shadow-black/20 border border-gray-200 rounded-lg w-60 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 dark:border-gray-700`;
+            })}>
+            ${options.derive(options => options.map(option => html`
+                <button onclick=${() => {
+                    open.value = false;
+                    target.value = option;
+                }} class="px-3 py-0.5 block hover:bg-indigo-600 hover:text-white w-full text-left">${option}
+                </button>
+            `[1]))}
+        </div>
+    `[1] as HTMLElement;
+
     let button: HTMLElement;
 
     return html`
@@ -172,24 +176,7 @@ function SelectBox<T>({options, target}: {options: Observable<T[]>, target: Obse
                 ${downArrowClone}
                 ${upArrowClone}
             </${Button}>
-            <div
-                self=${(self: HTMLElement) => selector = self}
-                class=${open.derive(open => {
-                    let conditional: string;
-                    if(open) {
-                        const rect = button.getBoundingClientRect();
-                        conditional = rect.y + rect.height + 320 > window.innerHeight ? "bottom-[calc(100%+.5rem)]" : "top-[calc(100%+.5rem)]";
-                    } else conditional = "hidden";
-                    return `${conditional} z-10 absolute shadow-xl dark:shadow-none shadow-black/20 border border-gray-200 rounded-lg w-60 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 dark:border-gray-700`;
-                })}>
-                ${insert(options.derive(options => options.map(option => html`
-                    <button onclick=${() => {
-                        open.value = false;
-                        target.value = option;
-                    }} class="px-3 py-0.5 block hover:bg-indigo-600 hover:text-white w-full text-left">${option}
-                    </button>
-                `[1])))}
-            </div>
+            ${selector}
         </div>
     `;
 }
@@ -222,13 +209,11 @@ worker.onmessage = (e: MessageEvent<Message>) => {
                 result: Item.unpack(step.result)
             }))
         };
-    } else {
-        result.value = e.data.error;
-    }
+    } else result.value = e.data.error;
 };
 
 function UIItem({item}: {item: Item}) {
-    return `
+    return native`
         <div class="table-cell">
             <h3 class="text-white">${item.item}</h3>
             ${item.enchantments.map(enchantment => `
@@ -277,7 +262,7 @@ document.querySelector("#app")!.append(...html`
                     </li>
                 </ul>
             </div>
-            <h1 class="font-semibold mr-auto text-black dark:text-white select-none">Items ${"("}${(() => {
+            <h1 class="font-semibold mr-auto text-black dark:text-white select-none">Items (${(() => {
                 const observable = new Observable(items.length);
                 
                 const update = () => observable.value = items.length;
@@ -336,9 +321,9 @@ document.querySelector("#app")!.append(...html`
             `[1])}
         </div>
         <div class=${output.derive(output => output ? "" : "hidden")}>
-            ${insert(result.derive(result => {
+            ${result.derive(result => {
                 if(typeof result === "object") {
-                    return staticHTML(`
+                    return html`
                         <h1 class="text-lg">Branch with total cost: ${result.totalCost}</h1>
                         <div class="grid [grid-template-columns:min-content_min-content_1fr_1fr_1fr] gap-4">
                             <div>Step</div>
@@ -346,27 +331,23 @@ document.querySelector("#app")!.append(...html`
                             <div>Target</div>
                             <div>Sacrifice</div>
                             <div>Result</div>
-                            ${result.steps.map((step, index) => `
+                            ${result.steps.map((step, index) => html`
                                 <div class="table-cell">${index + 1}</div>
                                 <div class="table-cell">${step.cost}</div>
-                                ${UIItem({item: step.target})}
-                                ${UIItem({item: step.sacrifice})}
-                                ${UIItem({item: step.result})}
-                            `).join("")}
+                                <${UIItem} item=${step.target}/>
+                                <${UIItem} item=${step.sacrifice}/>
+                                <${UIItem} item=${step.result}/>
+                            `).reduce((nodes, node) => (nodes.push(...node), nodes), [])}
                         </div>
-                    `);
+                    `;
                 }
                 
                 if(typeof result === "string") {
-                    return staticHTML(`
-                        <div>Error: ${result}</div>
-                    `);
+                    return html`<div>Error: ${result}</div>`;
                 }
                 
-                return staticHTML(`
-                    <div>Loading</div>
-                `);
-            }))}
+                return html`<div>Loading</div>`;
+            })}
         </div>
     </main>
     <footer class="p-6 text-gray-500 text-sm select-none font-light mt-auto">

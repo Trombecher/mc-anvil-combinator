@@ -121,6 +121,20 @@ export class ObservableArray<E> implements Iterable<E> {
 
     readonly #onInsert: ((index: number, element: E) => void)[] = [];
 
+    readonly #onMove: ((from: number, to: number) => void)[] = [];
+
+    /**
+     * Subscribes to move events.
+     * @returns A function that unsubscribes.
+     */
+    subscribeToMove(subscription: (from: number, to: number) => void) {
+        this.#onMove.push(subscription);
+        return () => {
+            const index = this.#onMove.indexOf(subscription);
+            if(index !== -1) this.#onMove.splice(index, 1);
+        };
+    }
+
     /**
      * Subscribes to insert events.
      * @returns A function that unsubscribes.
@@ -143,6 +157,15 @@ export class ObservableArray<E> implements Iterable<E> {
             const index = this.#onSet.indexOf(subscription);
             if(index !== -1) this.#onSet.splice(index, 1);
         };
+    }
+
+    /**
+     * Moves the item at index _from_ to index _to_.
+     * Note, that the element will _result at that exact index_ and nodes will shift _upwards_.
+     */
+    move(from: number, to: number) {
+        this.#data.splice(to, 0, this.#data.splice(from, 1)[0]);
+        for(const notify of this.#onMove) notify(from, to);
     }
 
     set(index: number, element: E): void {
