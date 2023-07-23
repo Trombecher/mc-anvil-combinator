@@ -1,5 +1,4 @@
 import "./main.css";
-import {Observable, ObservableArray, reduce} from "./observable.ts";
 import {
     Branch,
     enchantmentTypes,
@@ -8,7 +7,9 @@ import {
     itemTypes
 } from "./mceb.ts";
 import {Message} from "./api.ts";
-import {html, map, native} from "./a0.ts";
+
+import {html, map, native} from "azero";
+import {Observable, ObservableArray, reduce} from "azero/observable";
 
 type ObservableEnchantment = {
     type: Observable<string>,
